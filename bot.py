@@ -254,9 +254,12 @@ async def end_session(user_id: int, reason: str):
             ACTIVE_THREADS_G.set(len(state.active_threads))
         else:
             vc: discord.VoiceChannel = s.get("vc")
-            if vc: with suppress(discord.HTTPException): await vc.delete()
+            if vc:
+                with suppress(discord.HTTPException):
+                    await vc.delete()
             state.active_voice.pop(session_id, None)
             ACTIVE_VOICE_G.set(len(state.active_voice))
+
 
 # ── Queue ─────────────────────────────────────────────────────────────────────
 async def enqueue_user(user_id: int, mode: str) -> bool:
