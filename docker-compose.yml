@@ -1,0 +1,11 @@
+version: '3.8'
+
+services:
+  bot:
+    build: .
+    container_name: omegle-discord-bot
+    env_file:
+      - .env
+    ports:
+      - "8000:8000"
+    restart: unless-stopped 
