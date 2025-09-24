@@ -153,7 +153,7 @@ async def handle_search_timeout(user_id: int):
         with suppress(Exception):
             await thread.send(embed=Embed(title="⏰ Search Timed Out", description="We couldn't find a partner in time. Please try again later!", color=0xE74C3C))
             await asyncio.sleep(2)
-        await thread.delete()
+            await thread.delete()
     except Forbidden:
         log.warning(f"Forbidden deleting waiting thread for {user_id}")
     except discord.HTTPException as e:
