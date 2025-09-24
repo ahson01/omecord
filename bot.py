@@ -7,7 +7,6 @@ from contextlib import suppress
 from dotenv import load_dotenv
 from prometheus_client import start_http_server, Counter, Gauge, Histogram
 
-from keep_alive import keep_alive
 
 import discord
 from discord import ui, Interaction, Embed, ButtonStyle, PermissionOverwrite, Forbidden
@@ -40,7 +39,6 @@ ACTIVE_VOICE_G   = Gauge("active_voice_channels", "Active voice channels")
 QUEUE_SIZE       = Gauge("queue_size", "Users in queue", ["type"])
 SESSION_DURATION = Histogram("session_duration_seconds", "Length of completed sessions", buckets=[30,60,120,300,600,1800,3600])
 
-keep_alive()
 
 intents = discord.Intents.default()
 intents.members = True
