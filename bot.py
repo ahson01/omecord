@@ -326,12 +326,18 @@ async def voice_pairer():
 # ── Helpers ───────────────────────────────────────────────────────────────────
 async def safe_respond(inter: Interaction, content: str, ephemeral: bool = True):
     try:
-        if inter.response.is_done(): await inter.followup.send(content, ephemeral=ephemeral)
-        else: await inter.response.send_message(content, ephemeral=ephemeral)
-    except discord.errors.NotFound:
-        log.warning("Interaction expired")
+        if inter.is_expired():
+            return
+        if inter.response.is_done():
+            await inter.followup.send(content, ephemeral=ephemeral)
+        else:
+            await inter.response.send_message(content, ephemeral=ephemeral)
+    except discord.NotFound:
+        # Unknown interaction (expired or handled by another worker)
+        log.warning("Interaction not found while responding")
     except Exception as e:
-        log.error(f"Respond error: {e}")
+        log.error(f"Failed to respond to interaction: {e}")
+
 
 # ── Interactions ──────────────────────────────────────────────────────────────
 async def handle_start(inter: Interaction, mode: str):
@@ -363,21 +369,44 @@ async def handle_cancel(inter: Interaction):
 
 @bot.event
 async def on_interaction(inter: Interaction):
-    if inter.type != discord.InteractionType.component: return
+    if inter.type != discord.InteractionType.component:
+        return
+
     cid = inter.data.get("custom_id")
-    if not cid: return
+    if not cid:
+        return
+
+    # Acknowledge ASAP to avoid expiry
     try:
-        if not inter.response.is_done(): await inter.response.defer(ephemeral=True)
-        if   cid == "start_text":  await handle_start(inter, "text")
-        elif cid == "start_voice": await handle_start(inter, "voice")
-        elif cid == "cancel_search": await handle_cancel(inter)
-        elif cid == "leave_text":  await handle_leave(inter, "text")
-        elif cid == "leave_voice": await handle_leave(inter, "voice")
-        elif cid == "next_text":   await handle_next(inter, "text")
-        elif cid == "next_voice":  await handle_next(inter, "voice")
+        if not inter.is_expired() and not inter.response.is_done():
+            # thinking=False since we'll follow up quickly ourselves
+            await inter.response.defer(ephemeral=True, thinking=False)
+    except discord.NotFound:
+        # Token already expired; nothing we can do
+        log.warning(f"Interaction expired before defer (cid={cid})")
+        return
     except Exception as e:
-        log.error(f"Error handling interaction {cid}: {e}", exc_info=True)
-        await safe_respond(inter, "❌ An error occurred. Please try again.")
+        log.error(f"Error deferring interaction {cid}: {e}", exc_info=True)
+        # Try to continue anyway — followups may still work if acknowledged elsewhere
+
+    async def _handle():
+        try:
+            if   cid == "start_text":   await handle_start(inter, "text")
+            elif cid == "start_voice":  await handle_start(inter, "voice")
+            elif cid == "cancel_search":await handle_cancel(inter)
+            elif cid == "leave_text":   await handle_leave(inter, "text")
+            elif cid == "leave_voice":  await handle_leave(inter, "voice")
+            elif cid == "next_text":    await handle_next(inter, "text")
+            elif cid == "next_voice":   await handle_next(inter, "voice")
+        except Exception as e:
+            log.error(f"Error handling interaction {cid}: {e}", exc_info=True)
+            # Best-effort notify if still valid
+            with suppress(Exception):
+                if not inter.is_expired():
+                    await safe_respond(inter, "❌ An error occurred. Please try again.", ephemeral=True)
+
+    asyncio.create_task(_handle())
+
 
 # ── Slash commands ────────────────────────────────────────────────────────────
 @bot.tree.command(name="chat", description="Find a random text partner")
